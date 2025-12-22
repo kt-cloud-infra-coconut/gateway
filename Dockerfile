@@ -11,11 +11,12 @@ COPY ./server ./server
 COPY ./bunfig.toml ./bunfig.toml
 COPY ./tsconfig.json ./tsconfig.json
 COPY ./build.ts ./build.ts
+COPY ./prisma.config.ts ./prisma.config.ts
 
 RUN bun install
 
-RUN bun prisma db push
 RUN bun prisma generate
+RUN bun prisma db push
 
 ENV NODE_ENV=production
 
