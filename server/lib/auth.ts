@@ -4,6 +4,9 @@ import { prisma } from '../db/prisma';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin } from 'better-auth/plugins';
 import { apiKey } from 'better-auth/plugins';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
@@ -12,6 +15,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
+  trustedOrigins: ['http://localhost:3000', '*.terran9.com'],
   plugins: [
     lastLoginMethod({
       customResolveMethod: (ctx) => {
@@ -32,17 +36,23 @@ export const auth = betterAuth({
     }),
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
-        if (type === 'sign-in') {
-          // Send the OTP for sign in
-          console.log('type:', type);
-          console.log('email:', email);
-          console.log('otp:', otp);
-        } else if (type === 'email-verification') {
-          // Send the OTP for email verification
-          console.log('Send the OTP for email verification', email, otp);
-        } else {
-          // Send the OTP for password reset
-          console.log('Send the OTP for password reset', email, otp);
+        // sign-in OTP만 이메일로 발송 (나머지 type은 사용하지 않음)
+        if (type !== 'sign-in') return;
+
+        const from = process.env.RESEND_FROM_EMAIL;
+        if (!from) {
+          throw new Error('Missing env: RESEND_FROM_EMAIL');
+        }
+
+        const { error } = await resend.emails.send({
+          from,
+          to: email,
+          subject: `[OTP] Your sign-in code: ${otp}`,
+          text: `Your sign-in code is: ${otp}\n\nThis code expires soon. If you didn't request this, you can ignore this email.`,
+        });
+
+        if (error) {
+          throw new Error(error.message);
         }
       },
     }),

@@ -34,6 +34,8 @@ export async function ensureServicesInDbFromEnv(): Promise<void> {
   const services = readGatewayServicesFromEnv();
   if (services.length === 0) return;
 
+  const envHosts = services.map((s) => s.host);
+
   await Promise.all(
     services.map((s) =>
       prisma.service.upsert({
@@ -49,6 +51,14 @@ export async function ensureServicesInDbFromEnv(): Promise<void> {
       })
     )
   );
+
+  // env를 source-of-truth로 삼기 위해, env에 없는 서비스는 DB에서 제거합니다.
+  // (서비스 목록이 .env 변경 후에도 "그대로" 보이는 문제를 방지)
+  await prisma.service.deleteMany({
+    where: {
+      host: { notIn: envHosts },
+    },
+  });
 }
 
 export async function getServiceByHost(host: string) {

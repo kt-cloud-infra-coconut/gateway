@@ -10,10 +10,32 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
+
+  # 테스트용 Nginx 서비스 1 (8081)
+  nginx1:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '8081:80'
+    volumes:
+      - ./docker/nginx1/index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - app-network
+
+  # 테스트용 Nginx 서비스 2 (8082)
+  nginx2:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '8082:80'
+    volumes:
+      - ./docker/nginx2/index.html:/usr/share/nginx/html/index.html:ro
     networks:
       - app-network
 
@@ -24,7 +46,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - '3000:3000'
     env_file:
       - .env.production
     environment:
