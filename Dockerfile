@@ -14,7 +14,7 @@ COPY ./build.ts ./build.ts
 
 RUN bun install
 
-RUN bun prisma push
+RUN bun prisma db push
 RUN bun prisma generate
 
 ENV NODE_ENV=production
