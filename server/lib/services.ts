@@ -10,14 +10,23 @@ export type ServiceConfig = {
  * - GATEWAY_SERVICES: '{"svc1.example.com":{"upstream":"http://svc1:8080"},"svc2.example.com":{"upstream":"http://svc2:8080"}}'
  */
 export function readGatewayServicesFromEnv(): ServiceConfig[] {
-  const json = process.env.GATEWAY_SERVICES;
+  let json = process.env.GATEWAY_SERVICES;
   if (json && json.trim()) {
+    json = json.trim();
+    // .env에 값 전체를 따옴표로 감싸는 경우(예: '...')를 안전하게 처리
+    if (
+      (json.startsWith('"') && json.endsWith('"')) ||
+      (json.startsWith("'") && json.endsWith("'"))
+    ) {
+      json = json.slice(1, -1);
+    }
     try {
       const parsed = JSON.parse(json) as Record<string, { upstream: string }>;
       return Object.entries(parsed)
         .map(([host, v]) => ({ host, upstream: v?.upstream }))
         .filter((x) => x.host && x.upstream);
-    } catch {
+    } catch (e) {
+      console.error('[gateway] Invalid GATEWAY_SERVICES JSON:', e);
       return [];
     }
   }
