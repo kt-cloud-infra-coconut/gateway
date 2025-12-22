@@ -3,6 +3,7 @@ import index from '../public/index.html';
 import app from './elysia';
 
 const server = serve({
+  port: 80,
   routes: {
     // 게이트웨이 내부 API 및 인증 처리
     '/*': (req) => app.handle(req),

@@ -15,7 +15,7 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: 'postgresql',
   }),
-  trustedOrigins: ['http://localhost:3000', '*.terran9.com'],
+  trustedOrigins: ['http://localhost', 'http://a.terran9.com'],
   plugins: [
     lastLoginMethod({
       customResolveMethod: (ctx) => {
