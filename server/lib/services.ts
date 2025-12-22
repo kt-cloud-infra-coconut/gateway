@@ -10,7 +10,7 @@ export type ServiceConfig = {
  * - GATEWAY_SERVICES: '{"svc1.example.com":{"upstream":"http://svc1:8080"},"svc2.example.com":{"upstream":"http://svc2:8080"}}'
  */
 export function readGatewayServicesFromEnv(): ServiceConfig[] {
-  const json = Bun.env.GATEWAY_SERVICES;
+  const json = process.env.GATEWAY_SERVICES;
   if (json && json.trim()) {
     try {
       const parsed = JSON.parse(json) as Record<string, { upstream: string }>;
