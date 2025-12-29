@@ -163,6 +163,18 @@ model AccessLog {
   userAgent     String?
   blockedReason String?
 
+  // Geo Info
+  geoCountry  String?
+  geoCity     String?
+  geoRegion   String?
+  geoTimezone String?
+
+  // UA Info
+  browser String?
+  os      String?
+  device  String?
+  cpu     String?
+
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
