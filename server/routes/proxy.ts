@@ -2,6 +2,15 @@ import { Elysia } from 'elysia';
 import { auth } from '../lib/auth';
 import { prisma } from '../db/prisma';
 import { getServiceByHost } from '../lib/services';
+import {
+  authEventsTotal,
+  httpRequestDurationSeconds,
+  httpRequestsTotal,
+  maskClientIp,
+  nowSeconds,
+  rateLimitHitsTotal,
+  safePathLabel,
+} from '../lib/metrics';
 
 function parseHost(hostHeader: string | null): string | null {
   if (!hostHeader) return null;
@@ -58,11 +67,19 @@ function buildLoginRedirectUrl(reqUrl: URL): string {
 export const proxyRoutes = new Elysia()
   // /_gateback 이외의 모든 경로는 기본적으로 프록시 대상으로 처리합니다. (서비스 경로 변경 불필요)
   .all('/*', async ({ request }) => {
+    const start = nowSeconds();
     const url = new URL(request.url);
     const host = parseHost(request.headers.get('host'));
 
     // 게이트웨이 내부 경로는 여기서 프록시하지 않습니다.
     if (url.pathname.startsWith('/_gateback')) {
+      const status = '404';
+      const path = safePathLabel(url.pathname);
+      httpRequestsTotal.inc({ method: request.method, path, status });
+      httpRequestDurationSeconds.observe(
+        { method: request.method, path, status },
+        Math.max(0, nowSeconds() - start)
+      );
       return new Response('Not Found', { status: 404 });
     }
 
@@ -81,6 +98,13 @@ export const proxyRoutes = new Elysia()
           },
         })
         .catch(console.error);
+      const status = '400';
+      const path = safePathLabel(url.pathname);
+      httpRequestsTotal.inc({ method: request.method, path, status });
+      httpRequestDurationSeconds.observe(
+        { method: request.method, path, status },
+        Math.max(0, nowSeconds() - start)
+      );
       return new Response(msg, { status: 400 });
     }
 
@@ -101,6 +125,13 @@ export const proxyRoutes = new Elysia()
           },
         })
         .catch(console.error);
+      const status = '502';
+      const path = safePathLabel(url.pathname);
+      httpRequestsTotal.inc({ method: request.method, path, status });
+      httpRequestDurationSeconds.observe(
+        { method: request.method, path, status },
+        Math.max(0, nowSeconds() - start)
+      );
       return new Response(msg, { status: 502 });
     }
 
@@ -108,6 +139,7 @@ export const proxyRoutes = new Elysia()
     //    (쿠키/헤더만 사용하므로 request body는 소비되지 않습니다.)
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) {
+      authEventsTotal.inc({ result: 'failure', reason: 'no_session' });
       await prisma.accessLog.create({
         data: {
           host,
@@ -121,8 +153,16 @@ export const proxyRoutes = new Elysia()
           blockedReason: 'NO_SESSION',
         },
       });
+      const status = '302';
+      const path = safePathLabel(url.pathname);
+      httpRequestsTotal.inc({ method: request.method, path, status });
+      httpRequestDurationSeconds.observe(
+        { method: request.method, path, status },
+        Math.max(0, nowSeconds() - start)
+      );
       return Response.redirect(buildLoginRedirectUrl(url), 302);
     }
+    authEventsTotal.inc({ result: 'success', reason: 'session_ok' });
 
     // 2) 권한/레이트리밋 정책 계산 (유저별 override -> 서비스 기본)
     const userId = session.user.id as string;
@@ -151,6 +191,13 @@ export const proxyRoutes = new Elysia()
           blockedReason: 'DENY',
         },
       });
+      const status = '403';
+      const path = safePathLabel(url.pathname);
+      httpRequestsTotal.inc({ method: request.method, path, status });
+      httpRequestDurationSeconds.observe(
+        { method: request.method, path, status },
+        Math.max(0, nowSeconds() - start)
+      );
       return new Response('Forbidden', { status: 403 });
     }
 
@@ -162,6 +209,9 @@ export const proxyRoutes = new Elysia()
       const key = makeCounterKey(userId, service.id);
       const rl = checkRateLimit({ key, windowSec, max });
       if (!rl.allowed) {
+        rateLimitHitsTotal.inc({
+          client_ip_masked: maskClientIp(getClientIp(request)),
+        });
         await prisma.accessLog.create({
           data: {
             host,
@@ -176,6 +226,13 @@ export const proxyRoutes = new Elysia()
             blockedReason: 'RATE_LIMIT',
           },
         });
+        const status = '429';
+        const path = safePathLabel(url.pathname);
+        httpRequestsTotal.inc({ method: request.method, path, status });
+        httpRequestDurationSeconds.observe(
+          { method: request.method, path, status },
+          Math.max(0, nowSeconds() - start)
+        );
         return new Response('Too Many Requests', {
           status: 429,
           headers: {
@@ -213,6 +270,13 @@ export const proxyRoutes = new Elysia()
     });
 
     const res = await fetch(proxied);
+    const status = String(res.status);
+    const path = safePathLabel(url.pathname);
+    httpRequestsTotal.inc({ method: request.method, path, status });
+    httpRequestDurationSeconds.observe(
+      { method: request.method, path, status },
+      Math.max(0, nowSeconds() - start)
+    );
     // 비동기 로그 적재 (응답 지연 최소화)
     prisma.accessLog
       .create({

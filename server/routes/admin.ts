@@ -3,6 +3,7 @@ import { prisma } from '../db/prisma';
 import { betterAuth } from '../middleware/auth';
 import { ensureServicesInDbFromEnv } from '../lib/services';
 import type { Prisma } from '../../generated/prisma/client';
+import { auditEventsTotal } from '../lib/metrics';
 
 function requireAdmin(user: any) {
   const role = (user?.role ?? '').toString();
@@ -53,7 +54,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin', tags: ['Admin'] })
               where: { id: params.id },
             });
             if (!svc) return status(404);
-            return await prisma.service.update({
+            const updated = await prisma.service.update({
               where: { id: params.id },
               data: {
                 name: body.name ?? undefined,
@@ -63,6 +64,8 @@ export const adminRoutes = new Elysia({ prefix: '/admin', tags: ['Admin'] })
                 defaultRateLimitMax: body.defaultRateLimitMax ?? undefined,
               },
             });
+            auditEventsTotal.inc({ type: 'service_policy_update' });
+            return updated;
           },
           {
             params: t.Object({ id: t.String() }),
@@ -125,13 +128,15 @@ export const adminRoutes = new Elysia({ prefix: '/admin', tags: ['Admin'] })
               where: { id: params.id },
             });
             if (!u) return status(404);
-            return await prisma.user.update({
+            const updated = await prisma.user.update({
               where: { id: params.id },
               data: {
                 role: body.role,
               },
               select: { id: true, role: true },
             });
+            auditEventsTotal.inc({ type: 'user_role_update' });
+            return updated;
           },
           {
             params: t.Object({ id: t.String() }),
@@ -197,6 +202,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin', tags: ['Admin'] })
                 rateLimitMax: body.rateLimitMax,
               },
             });
+            auditEventsTotal.inc({ type: 'user_service_policy_upsert' });
             return p;
           },
           {
