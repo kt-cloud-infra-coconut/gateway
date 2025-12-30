@@ -1,21 +1,20 @@
-import 'dotenv/config';
-import { defineConfig, env } from 'prisma/config';
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   // the main entry for your schema
-  schema: 'prisma/schema.prisma',
+  schema: "prisma/schema.prisma",
 
   // where migrations should be generated
   // what script to run for "prisma db seed"
   migrations: {
-    path: 'prisma/migrations',
-    seed: 'bun run prisma/seed.ts',
+    path: "prisma/migrations",
+    seed: "bun run prisma/seed.ts",
   },
 
-  // The database URL
+  // The database URL (직접 process.env 사용 - Docker 환경 변수 호환)
   datasource: {
-    // Type Safe env() helper
-    // Does not replace the need for dotenv
-    url: env('DATABASE_URL'),
+    url:
+      process.env.DATABASE_URL ||
+      "postgresql://postgres:password@localhost:5432/gateway?schema=public",
   },
 });
