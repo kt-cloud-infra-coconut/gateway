@@ -140,6 +140,28 @@ export const proxyRoutes = new Elysia()
       return new Response("Not Found", { status: 404 });
     }
 
+    // /metrics와 /_gatefront는 프록시 대상이 아님 (이미 상위에서 처리됨)
+    if (url.pathname === "/metrics" || url.pathname.startsWith("/_gatefront")) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    // 브라우저 자동 요청들은 세션 체크 없이 404 반환 (메트릭 노이즈 방지)
+    const ignorePaths = [
+      "/favicon.ico",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/.well-known/",
+      "/apple-touch-icon",
+      "/manifest.json",
+    ];
+
+    if (
+      ignorePaths.some((p) => url.pathname.startsWith(p) || url.pathname === p)
+    ) {
+      // 메트릭이나 로그 없이 조용히 404 반환
+      return new Response("Not Found", { status: 404 });
+    }
+
     if (!host) {
       const msg = "Missing Host header";
       await logAccess({

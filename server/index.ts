@@ -1,10 +1,21 @@
 import { serve } from "bun";
 import index from "../public/index.html";
 import app from "./elysia";
+import { register } from "./lib/metrics";
 
 const server = serve({
   port: 80,
   routes: {
+    // /metrics는 최우선 처리 (Elysia 거치지 않음)
+    "/metrics": async () => {
+      const body = await register.metrics();
+      return new Response(body, {
+        headers: {
+          "content-type": register.contentType,
+        },
+      });
+    },
+
     // 게이트웨이 내부 API 및 인증 처리
     "/*": (req) => app.handle(req),
 
